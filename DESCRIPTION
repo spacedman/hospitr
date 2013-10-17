@@ -1,0 +1,14 @@
+Package: hospitr
+Maintainer: Who to complain to <yourfault@somewhere.net>
+Author: rowlings
+Version: 1.0
+License: GPL-3
+Title: Hospital Sim
+Description: 
+Imports:
+    circular
+Suggests:
+    testthat,
+    roxygen2
+Collate:
+    'hospitr-package.r'
