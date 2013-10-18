@@ -82,3 +82,22 @@ print.vonmises <- function(x,...){
     cat("Concentration = ",with(e,kappa),"\n")
     invisible(0)
 }
+
+##' uniform time-of-day between given hours
+##'
+##' @title uniform time-of-day between hours
+##' @param hlo early hour
+##' @param hhi late hour - must be greater than hlo
+##' @return a time-of-day generator.
+##' @author Barry S Rowlingson
+todBetween <- function(hlo,hhi){
+    hlo=hlo/24
+    hhi=hhi/24
+    foo=function(admissions){
+        ncases=nCases(admissions)
+        rt = ddays(runif(ncases,hlo,hhi))
+        return(rt)
+    }
+    class(foo)=c("between","daily","function")
+    return(foo)
+}

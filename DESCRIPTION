@@ -6,6 +6,7 @@ License: GPL-3
 Title: Hospital Sim
 Description: 
 Imports:
+    plyr,
     circular
 Suggests:
     testthat,
