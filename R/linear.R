@@ -13,43 +13,62 @@ dailyAdmissionCounts <- function(epatients){
     
 }
 
-linearFit <- function(epatients,ndays,escale=14){
+linearFit <- function(epatients,ndays,escale=3,crits=c(0.5,0.95,0.99)){
     npatients = nrow(epatients)
     epatients$weight = exp(as.numeric(-(max(epatients$Date)-epatients$Date)/escale))
-    epatients$wday = wday(epatients$Date, label=TRUE)
+    epatients$wday = wday_factor(epatients$Date)
 
-    prediction=data.frame(Date = max(epatients$Date) + (1:ndays))
-    prediction$wday=wday(prediction$Date, label=TRUE)
+    prediction=data.frame(Date = max(epatients$Date) + (0:ndays))
+    prediction$wday=wday_factor(prediction$Date)
     
-    predictSection = function(data,SectionName){
+    predictSection = function(data,SectionName,crits){
         data = data[data$Section==SectionName,]
         m = glm(Count~Date+wday, weight=data$weight, data = data, family=poisson)
-        pM = predict(m,newdata=prediction, type="response", se.fit=TRUE)
-        p = prediction
-        p$Count = pM$fit
-        p$se = pM$se
-        p$Section = SectionName
-        p$wday = NULL
-        p
+        pM = predict(m,newdata=prediction,type="response")
+        predictionData = ldply(crits, function(crit){
+            se=qnorm((crit+1)/2)
+            d = glm_predict_interval(m, newdata=prediction, se=se)
+            d$crit=crit
+            d
+        })
+        predictionData$Section=SectionName
+        predictionData$Date=prediction$Date
+        return(predictionData)
+        
     }
 
-    surgical = predictSection(epatients, "Surgical")
-    medical = predictSection(epatients, "Medical")
+    surgical = predictSection(epatients, "Surgical", crits = crits)
+    medical = predictSection(epatients, "Medical", crits = crits)
 
     rbind(surgical,medical)
     
 }
 
-plotPredictions <- function(epatients, predictions, pre=28){
-    lim = max(epatients$Date) - pre
-    epatients = subset(epatients, Date > lim)
-    epatients$se = 0
-    all = rbind(epatients, predictions)
-    ggplot(data=all, aes(x = Date, y = Count, group = Section)) +
-        geom_ribbon(aes(x = Date, ymin = pmax(Count - 2.60 * se, 0), ymax=Count+2.60*se ), fill="gray75", alpha=0.5) + 
-        geom_ribbon(aes(x=Date, ymin=pmax(Count-1.96*se, 0), ymax=Count+1.96*se ), fill="gray50", alpha=0.5) + 
-        geom_ribbon(aes(x=Date, ymin=pmax(Count-0.68*se, 0), ymax=Count+0.68*se ), fill="gray30", alpha=0.5) + 
-        geom_line(aes(y=Count)) +
-#        geom_hline(yintercept=20, colour="red") + 
-        facet_wrap(~Section, ncol=1, scales="free_y")
+predictAdmissions <- function(m, ndays, crit=c(.5, .95, .99)){
+    ses = qnorm((crit+1)/2)
+    
+    pM = predict(m,newdata=prediction, type="response", se.fit=TRUE)
+}
+
+plotPredictions <- function(ecount, efit, pre=28){
+    lim = max(ecount$Date) - pre
+    ecount = subset(ecount, Date >= lim)
+    ggplot(data=efit,aes(x=Date))+
+        geom_ribbon(aes(ymin=low,ymax=high),data=subset(efit,crit==0.99), fill="gray75", alpha=0.5) +
+        geom_ribbon(aes(ymin=low,ymax=high),data=subset(efit,crit==0.95), fill="gray50", alpha=0.5) +
+        geom_ribbon(aes(ymin=low,ymax=high),data=subset(efit,crit==0.5), fill="gray30", alpha=0.5) +
+        geom_line(aes(y=Count),colour="black") +
+        geom_line(data=ecount,aes(x=Date,y=Count))+
+         facet_wrap(~Section,ncol=1,scales="free_y")
+
+}
+
+
+rChartPredictions <- function(ecount, predictions, pre=28){
+    require(rCharts)
+    ecount$Date=as.character(ecount$Date)
+    m1 <- mPlot(x = "Date", y = "Count", type = "Line", data = ecount)
+    m1 
+                                        #    r1 <- rPlot(Count ~ Date | Section, data = ecount, type = "line")
+#    r1
 }
