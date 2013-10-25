@@ -11,3 +11,7 @@ glm_predict_interval <- function(m,newdata,se=2){
     p
         
 }
+
+toJSDateNum <- function(Dates){
+    as.numeric(Dates)*1000*24*60*60
+}
