@@ -25,10 +25,14 @@ linearFit <- function(epatients,ndays,escale=3,crits=c(0.5,0.95,0.99)){
         data = data[data$Section==SectionName,]
         m = glm(Count~Date+wday, weight=data$weight, data = data, family=poisson)
         pM = predict(m,newdata=prediction,type="response")
+
         predictionData = ldply(crits, function(crit){
             se=qnorm((crit+1)/2)
             d = glm_predict_interval(m, newdata=prediction, se=se)
             d$crit=crit
+            d$Count[1]=data[nrow(data),"Count"]
+            d$low[1]=d$Count[1]
+            d$high[1]=d$Count[1]
             d
         })
         predictionData$Section=SectionName
@@ -62,6 +66,7 @@ plotPredictions <- function(ecount, efit, pre=28){
          facet_wrap(~Section,ncol=1,scales="free_y")
 
 }
+
 
 
 rChartPredictions <- function(ecount, predictions, pre=28){
