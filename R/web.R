@@ -21,6 +21,7 @@ writeAllJSFiles <- function(emerg, daysAhead=45, daysBefore=7, site="./Web/Cactu
     writeData(ecount, daysBefore, fp("admissionData.js"))
     writeSectionTable(efit,"Medical",tp("mtab.html"))
     writeSectionTable(efit,"Surgical",tp("stab.html"))
+    writePredictionXL(efit,fp("prediction.xlsx"))
 }
 
 writeData <- function(ecount, ndays, filename){
