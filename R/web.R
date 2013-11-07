@@ -6,7 +6,24 @@ makeFlotSeries <- function(efit){
     }
 
 }
-
+##' write all files for web (not just JS!)
+##'
+##' this function writes the JS and other stuff for the web site
+##'
+##' Process:
+##' 
+##' load("./Data/25-7-2013/emerg.RData")
+##' emerg=subset(emerg,AEOBS=="")
+##' edata = data.frame(admission=emerg$Adm.Date, Section=emerg$med.surg..based.on.specialty.)
+##' writeAllJSFiles(edata)
+##' 
+##' @title Write All Web Output Files
+##' @param emerg data frame of admission (Date) and Section (Medical/Surgical)
+##' @param daysAhead number of days to predict ahead
+##' @param daysBefore number of data points to include before
+##' @param site path to site root
+##' @return nothing much
+##' @author Barry S Rowlingson
 writeAllJSFiles <- function(emerg, daysAhead=45, daysBefore=7, site="./Web/Cactus/Site/"){
     data=file.path(site,"static/data/")
     templates = file.path(site,"templates")
@@ -72,7 +89,7 @@ makeSeries <- function(efit,section){
     efit = efit[order(efit$Date),]
     crits = sort(unique(efit$crit))
     efit$dJS = toJSDateNum(efit$Date)
-    eseries = efit[crit==crits[1],c("dJS","Count")]
+    eseries = efit[efit$crit==crits[1],c("dJS","Count")]
     series = list(est = toXY(eseries$dJS,eseries$Count))
     critseries = llply(crits,function(crit){
         ecrit = efit[efit$crit==crit,]

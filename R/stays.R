@@ -2,7 +2,7 @@
 ##'
 ##' @title Constant stay-time generator
 ##' @param meanStay mean stay time in days
-##' @return 
+##' @return a stay-time generator
 ##' @author Barry S Rowlingson
 stayIIDExponential <- function(meanStay){
   force(meanStay)

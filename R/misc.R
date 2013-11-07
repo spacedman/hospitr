@@ -1,4 +1,5 @@
 wday_factor <- function(Dates){
+    require(lubridate)
     factor(wday(Dates,label=TRUE),ordered=FALSE)
 
 }

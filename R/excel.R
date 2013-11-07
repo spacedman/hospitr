@@ -1,6 +1,6 @@
 
 writePredictionXL <- function(efit, fp){
-
+    require(xlsx)
     wb = createWorkbook(type="xlsx")
 
     cs <- CellStyle(wb, font=Font(wb, isBold=TRUE), alignment=Alignment(h="ALIGN_RIGHT"))

@@ -7,9 +7,24 @@ Title: Hospital Sim
 Description: 
 Imports:
     plyr,
+    lubridate,
+    xlsx,
+    hwriter,
+    rCharts,
+    ggplot2,
     circular
 Suggests:
     testthat,
     roxygen2
 Collate:
     'hospitr-package.r'
+    'cases.R'
+    'dailies.R'
+    'excel.R'
+    'hospital.R'
+    'linear.R'
+    'misc.R'
+    'simulate.R'
+    'stays.R'
+    'summaries.R'
+    'web.R'

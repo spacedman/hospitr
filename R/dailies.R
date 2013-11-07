@@ -57,10 +57,11 @@ print.uniform <- function(x,...){
 ##'
 ##' Returns a generator that creates times sampled from a
 ##' von Mises distribution with given peak hour and spread kappa
-##' @title 
+##' 
+##' @title VonMises dist Admission Times
 ##' @param hr hour (possibly fractional) of the daily peak
 ##' @param kappa concentration parameter 0=uniform
-##' @return 
+##' @return generator
 ##' @author Barry S Rowlingson
 todVonMises <- function(hr,kappa){
     force(hr)

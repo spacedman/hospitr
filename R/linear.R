@@ -14,6 +14,7 @@ dailyAdmissionCounts <- function(epatients){
 }
 
 linearFit <- function(epatients,ndays,escale=3,crits=c(0.5,0.95,0.99)){
+    require(plyr)
     npatients = nrow(epatients)
     epatients$weight = exp(as.numeric(-(max(epatients$Date)-epatients$Date)/escale))
     epatients$wday = wday_factor(epatients$Date)
@@ -40,10 +41,9 @@ linearFit <- function(epatients,ndays,escale=3,crits=c(0.5,0.95,0.99)){
         return(predictionData)
         
     }
-
+    
     surgical = predictSection(epatients, "Surgical", crits = crits)
     medical = predictSection(epatients, "Medical", crits = crits)
-
     rbind(surgical,medical)
     
 }
@@ -55,6 +55,7 @@ predictAdmissions <- function(m, ndays, crit=c(.5, .95, .99)){
 }
 
 plotPredictions <- function(ecount, efit, pre=28){
+    require(ggplot2)
     lim = max(ecount$Date) - pre
     ecount = subset(ecount, Date >= lim)
     ggplot(data=efit,aes(x=Date))+
