@@ -70,6 +70,8 @@ writeSectionTable <- function(efit,section,fp){
     tm[,-1] = as.character(round(as.numeric(tm[,-1])))
     tm[,1]=format(t$Date,"%b&nbsp;%d")
     tdclass=rep(c("date","forecast","low c50","high c50","low c95","high c95","low c99","high c99"),rep(nrow(tm),8))
+    weekend = ifelse(is.weekend(t$Date),"weekend","weekday")
+    tdclass[1:nrow(tm)]=paste(tdclass[1:nrow(tm)],weekend)
     tableText = hwrite(tm,row.names=FALSE,table.id=paste0(section,"table"), table.class="neat sectiontable", class=tdclass)
     cat(tableText, file=fp)
     options(digits=d)
@@ -122,4 +124,8 @@ makeEnvJS <- function(env){
 
 toXY <- function(x,y){
 paste0("[ [",paste(x,y,sep=",",collapse="], ["),"] ]")
+}
+
+is.weekend <- function(d){
+    wday(d) %% 7 <2
 }
