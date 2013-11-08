@@ -67,3 +67,56 @@ occupancyAt <- function(cases,datetime){
 }
 
 
+rElectivePoisson <- function(lambda){
+    force(lambda)
+    rF = function(dates){
+        return(rpois(length(dates),lambda))
+    }
+    class(rF) <- c("function","electivePoisson")
+    return(rF)
+}
+
+rElectiveExpPoisson <- function(lambda, decay){
+    force(lambda)
+    force(decay)
+    rF = function(dates){
+        delta = dates-dates[1]
+        lambdaT = lambda * exp(-as.numeric(delta)/decay)
+        return(rpois(length(dates),lambdaT))
+    }
+    class(rF)=c("function","electiveDecaying")
+    return(rF)
+}
+
+rZeroProduct <- function(pzero, generator){
+    force(pzero)
+    force(generator)
+    rF = function(dates){
+        d = generator(dates)
+        u = runif(length(dates))
+        d[u<=pzero]=0
+        return(d)
+    }
+    class(rF)=c("function","electiveZeroes")
+    return(rF)
+}
+
+dailyRates <- function(s7){
+    ## s7 is Sun/M/T/W/T/F/Sat
+    force(s7)
+    F = function(dates){
+        return(s7[wday(dates)])
+    }
+    return(F)
+}
+
+dailyComposition <- function(daily, generator){
+    force(daily)
+    force(generator)
+    F = function(dates){
+        return(round(daily(dates)*generator(dates)))
+    }
+    return(F)
+}
+
+        
