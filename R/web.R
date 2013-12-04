@@ -24,20 +24,21 @@ makeFlotSeries <- function(efit){
 ##' @param site path to site root
 ##' @return nothing much
 ##' @author Barry S Rowlingson
-writeAllJSFiles <- function(emerg, daysAhead=45, daysBefore=7, site="./Web/Cactus/Site/"){
+writeAllJSFiles <- function(emerg, daysAhead=45, daysBefore=7, site="./Web/Cactus/Site/", electives){
     data=file.path(site,"static/data/")
     templates = file.path(site,"templates")
     tp = function(f){file.path(templates,f)}
     fp=function(f){file.path(data, f)}
     ecount = dailyAdmissionCounts(emerg)
     efit = linearFit(ecount, daysAhead, escale=5)
+    ## now we have the dates, get the electives
     m=makeSeries(efit, "Medical")
     s=makeSeries(efit, "Surgical")
     writeSeries(s, "surgical", fp("forecastSurgical.js"))
     writeSeries(m, "medical", fp("forecastMedical.js"))
     writeData(ecount, daysBefore, fp("admissionData.js"))
-    writeSectionTable(efit,"Medical",tp("mtab.html"))
-    writeSectionTable(efit,"Surgical",tp("stab.html"))
+    writeSectionTable(efit,"Medical",tp("mtab.html"),electives[["Medical"]])
+    writeSectionTable(efit,"Surgical",tp("stab.html"),electives[["Surgical"]])
     writePredictionXL(efit,fp("prediction.xlsx"))
 }
 
@@ -61,20 +62,36 @@ sectionTable <- function(efit, section){
     return(table)
 }
 
-writeSectionTable <- function(efit,section,fp){
+writeSectionTable <- function(efit,section,fp, gelective){
     require(hwriter)
+    file.remove(fp)
+#    O = function(text,file=fp,append=TRUE,...){
+#        cat(text,file=fp,append=TRUE,...)
+#    }
     d=options()$digits
     options(digits=2)
     t = sectionTable(efit,section)
+    nelect = gelective(t$Date)
     tm = as.matrix(t)
     tm[,-1] = as.character(round(as.numeric(tm[,-1])))
-    tm[,1]=format(t$Date,"%b&nbsp;%d")
-    tdclass=rep(c("date","forecast","low c50","high c50","low c95","high c95","low c99","high c99"),rep(nrow(tm),8))
+    tm=cbind(tm,nelect)
+    dow=substr(format(t$Date,"%a"),1,1)
+    tm[,1]=paste(dow,"&nbsp;",format(t$Date,"%b&nbsp;%d"),sep="")
+    colclasses = c("date","forecast","low c50","high c50","low c95","high c95","low c99","high c99","sched")
+    tdclass=matrix(rep(colclasses,rep(nrow(tm),ncol(tm))),ncol=ncol(tm))
+    heads=c("Date","Forecast","Lower 50%","Upper 50%","Lower 95%","Upper 95%","Lower 99%","Upper 99%","Sched.")
     weekend = ifelse(is.weekend(t$Date),"weekend","weekday")
-    tdclass[1:nrow(tm)]=paste(tdclass[1:nrow(tm)],weekend)
-    tableText = hwrite(tm,row.names=FALSE,table.id=paste0(section,"table"), table.class="neat sectiontable", class=tdclass)
-    cat(tableText, file=fp)
+    sat = ifelse(wday(t$Date)==7,"saturday","")
+    sun = ifelse(wday(t$Date)==1,"sunday","")
+    trclass=paste(weekend,sat,sun,sep=" ")
+    writeHTML(tm, id=paste0(section,"table"),
+              mainclass="neat sectiontable",
+              heads = heads,
+              trclass=trclass,
+              tdclass=tdclass,
+              fp=fp)
     options(digits=d)
+    return(invisible(0))
 }
 
 getDataXYSection <- function(ecount, section, ndays){
@@ -128,4 +145,28 @@ paste0("[ [",paste(x,y,sep=",",collapse="], ["),"] ]")
 
 is.weekend <- function(d){
     wday(d) %% 7 <2
+}
+
+
+writeHTML <- function(table, id="mytable", mainclass="mainclass", heads, trclass="myrow", tdclass, fp=""){
+    O = function(text,file=fp,append=TRUE,...){
+        cat(text,file=fp,append=TRUE,...)
+    }
+    O(paste0('<table id="',id,'" class="',mainclass,'">\n'))
+    O("<tr>")
+    for(i in 1:ncol(table)){
+        O(paste0("<th>",heads[i],"</th>\n"))
+    }
+    O("</tr>\n")
+    trclass=rep(trclass,length=nrow(table))
+    for(i in 1:nrow(table)){
+        O(paste0('<tr class="',trclass[i],'">\n'))
+        for(j in 1:ncol(table)){
+            O(paste0('<td class="',tdclass[i,j],'">'))
+            O(table[i,j])
+            O('</td>\n')
+        }
+        O('</tr>\n')
+    }
+    O("</table>\n")
 }
