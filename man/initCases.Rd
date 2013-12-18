@@ -1,0 +1,26 @@
+\name{initCases}
+\alias{initCases}
+\title{Generate some initial cases}
+\usage{
+  initCases(n, day = as.Date("2010-01-01"), dayStay = 2)
+}
+\arguments{
+  \item{n}{number of cases}
+
+  \item{day}{start date}
+
+  \item{dayStay}{stay duration}
+}
+\value{
+  dataframe with admission and discharge columns
+}
+\description{
+  Generate some sample cases
+}
+\details{
+  Sample case generation
+}
+\author{
+  Barry S Rowlingson
+}
+

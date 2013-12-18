@@ -8,11 +8,11 @@
 ##' @return nothing
 ##' @author Barry S Rowlingson
 
-distplot <- function(x,ydist,ymax,ylab="count",xlab="Date",col=c(0,0,0), cex=1){
+distplot <- function(x,ydist,ymax,ylab="count",xlab="Date",colScheme=cschemeBlack, cex=1){
     plot(range(x),c(0,ymax),type="n",ylab=ylab,xlab=xlab)
     xy=expand.grid(seq_along(x),0:ymax)
     xyp = expand.grid(x,0:ymax)
-    points(xyp[,1],xy[,2],pch=19,cex=cex,col=rgb(col[1],col[2],col[3],alpha=ydist(xy[,1],xy[,2])))
+    points(xyp[,1],xy[,2],pch=19,cex=cex,col=colScheme(ydist(xy[,1],xy[,2])))
 }
 
 envplot <- function(x,ydist,ymax,ylab="count",xlab="Date", col=c(0,0,0), cex=1, add=FALSE){
@@ -26,6 +26,21 @@ envplot <- function(x,ydist,ymax,ylab="count",xlab="Date", col=c(0,0,0), cex=1, 
     alpha = 1-abs(1-2*d)
     points(xyp[,1],xy[,2],pch=19,cex=cex,col=rgb(col[1],col[2],col[3],alpha=alpha))
 }
+
+c2r <- function(col){
+    t(col2rgb(col))/255
+}
+
+cschemeBlack <- function(p){
+    rgb(0,0,0,alpha=p)
+}
+
+cscheme1 <- function(p){
+    p = 1-p
+    cname = c2r(as.character(cut(p,breaks = c(-0.1,.5,.95,1.1),labels=c("#30FF30","orange","red"))))
+    return(rgb(cname[,1],cname[,2],cname[,3],(1-p)^(0.75)))
+}
+    
 
 envareas <- function(x,ydist,ymax,ylab="count",xlab="Date", col=c(0,0,0), cex=1, p=c(.99,.95,.5),add=FALSE){
     if(!add){
