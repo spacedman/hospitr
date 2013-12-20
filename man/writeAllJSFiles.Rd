@@ -3,7 +3,7 @@
 \title{Write All Web Output Files}
 \usage{
   writeAllJSFiles(emerg, daysAhead = 45, daysBefore = 7,
-    site = "./Web/Cactus/Site/")
+    site = "./Web/Cactus/Site/", electives)
 }
 \arguments{
   \item{emerg}{data frame of admission (Date) and Section

@@ -1,0 +1,27 @@
+\name{distplot}
+\alias{distplot}
+\title{distribution visualisation plot}
+\usage{
+  distplot(x, ydist, ymax, ylab = "count", xlab = "Date",
+    colScheme = cschemeBlack, cex = 1)
+}
+\arguments{
+  \item{x}{x coordinates}
+
+  \item{ydist}{function of x returning the distribution...}
+
+  \item{ymax}{maximum y}
+}
+\value{
+  nothing
+}
+\description{
+  plot coloured distributions as function of x
+}
+\details{
+  coloured distribution plots
+}
+\author{
+  Barry S Rowlingson
+}
+

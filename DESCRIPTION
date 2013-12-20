@@ -4,7 +4,7 @@ Author: Barry Rowlingson
 Version: 1.0
 License: GPL-3
 Title: Hospital Sim
-Description: 
+Description: hospital admission project
 Imports:
     plyr,
     lubridate,
@@ -28,3 +28,6 @@ Collate:
     'stays.R'
     'summaries.R'
     'web.R'
+    'dists.R'
+    'paula.R'
+    'plots.R'
