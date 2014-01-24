@@ -8,12 +8,12 @@ Description: hospital admission project
 Imports:
     plyr,
     lubridate,
-    xlsx,
     hwriter,
-    rCharts,
     ggplot2,
     circular
 Suggests:
+    rCharts,
+    xlsx,
     testthat,
     roxygen2
 Collate:
@@ -31,3 +31,4 @@ Collate:
     'dists.R'
     'paula.R'
     'plots.R'
+    'naive.R'
