@@ -16,3 +16,13 @@ glm_predict_interval <- function(m,newdata,se=2){
 toJSDateNum <- function(Dates){
     as.numeric(Dates)*1000*24*60*60
 }
+
+## load one thing from a saved data file with one thing in it
+loadFrom=function(name){
+    e = new.env()
+    load(name,env=e)
+    names = with(e,ls())
+    stopifnot(length(names)==1)
+    return(get(names,envir=e))
+}
+  

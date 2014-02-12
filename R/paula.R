@@ -25,28 +25,35 @@ fnConstructDailyCounts<-function(ds,mindates,maxdates){
 
 ### 1. DATASET
 
+fnCovMat <- function(date, count){
+    res = data.frame(dates=date, adm=count)
+    res$wday = wday(res$dates)
+    fnCompleteDataset(res)
+}
+
 fnCompleteDataset<-function(res){
     n<- dim(res)[1]
     Y<-res$adm
     dayofweek<-res$wday
-    t<-1:n
-    cosine=cos((2*pi/365)*t)
-    sine =sin((2*pi/365)*t)
+    ## change time term to fraction of year
+    yd = yday(res$dates)
+    cosine=cos(2*pi*yd/365)
+    sine =sin(2*pi*yd/365)
     day2<-as.numeric(dayofweek==2)
     day3<-as.numeric(dayofweek==3)
     day4<-as.numeric(dayofweek==4)
     day5<-as.numeric(dayofweek==5)
     day6<-as.numeric(dayofweek==6)
     day7<-as.numeric(dayofweek==7)
-    dataComplete<-data.frame(Y,dayofweek,t,cosine,sine,day2,day3,day4,day5,day6,day7)
+    dataComplete<-data.frame(Y,dayofweek,yd,cosine,sine,day2,day3,day4,day5,day6,day7)
     return(dataComplete)
 }
 
 fnSubsetDataset<-function(res,mindate,maxdate){
     dataComplete<-fnCompleteDataset(res)
-    windowmin<-which(as.Date(res$dates)== as.Date(mindate))
-    windowmax<-which(as.Date(res$dates)== as.Date(maxdate))
-    dataSubset<-dataComplete[(windowmin:windowmax),]
+    windowmin<-as.Date(res$dates) >= as.Date(mindate)
+    windowmax<-as.Date(res$dates) <= as.Date(maxdate)
+    dataSubset<-dataComplete[(windowmin & windowmax),]
     return(dataSubset)
 }
 
@@ -60,25 +67,25 @@ fnCreateObsMatrixCovariatesDynamicCoeff<-function(dataset,modelo){
     my<-dataset$Y
 
     if(modelo=="Static"){
-        mX<-cbind(rep(1,length(dataset$t)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]))
+        mX<-cbind(rep(1,nrow(dataset)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]))
         dynamicCoeff<-rep(0,9)
     }
     if(modelo=="DynamicInterceptCosSin"){
-        mX<-cbind(rep(1,length(dataset$t)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]),
-                  rep(1,length(dataset$t)),as.matrix(dataset[,c("cosine","sine")]))
+        mX<-cbind(rep(1,nrow(dataset)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]),
+                  rep(1,nrow(dataset)),as.matrix(dataset[,c("cosine","sine")]))
         dynamicCoeff<-c(rep(0,9),1,1,1)
     }
     if(modelo=="DynamicIntercept"){
-        mX<-cbind(rep(1,length(dataset$t)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]),
-                  rep(1,length(dataset$t)))
+        mX<-cbind(rep(1,nrow(dataset)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]),
+                  rep(1,nrow(dataset)))
         dynamicCoeff<-c(rep(0,9),1)
     }
     if(modelo=="DynamicCosSin"){
-        mX<-cbind(rep(1,length(dataset$t)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]),
+        mX<-cbind(rep(1,nrow(dataset)),as.matrix(dataset[,c("cosine","sine","day2","day3","day4","day5","day6","day7")]),
                   as.matrix(dataset[,c("cosine","sine")]))
         dynamicCoeff<-c(rep(0,9),1,1)
     }
-    return(list(my,mX,dynamicCoeff))
+    return(list(y=my,X=mX,dyn=dynamicCoeff))
 }
 
 
@@ -89,7 +96,7 @@ fnDefineModel<-function(my, mX, mQ=NULL, mT=NULL){
     if(is.null(mQ)){
         mQ<-diag(0,dim(mX)[2])
     }
-    model<-fnRegSSM(y=my, X=mX, H = NULL, Q = mQ, u = NULL, distribution = "Poisson")
+    model<-regSSM(y=my, X=mX, H = NULL, Q = mQ, u = NULL, distribution = "Poisson")
     if(is.null(mT)){
         model$T[,,1]<-diag(1,dim(mX)[2])
     }else{
@@ -127,7 +134,7 @@ fnEstimateQandT<-function(model, dynamicCoeff){
 fnImportanceSample<-function(model, numsim){
     sam<-importanceSSM(model,save.model=FALSE,nsim=numsim)
     w<-sam$weights/sum(sam$weights)
-    return(list(sam,w))
+    return(list(sam=sam,w=w))
 }
 
 ### Independent sample. Sampling with replacement from the importance sample
@@ -218,144 +225,116 @@ fnQuantiles2<-function(x,quant,w){
     return(c(sortx[which.min(abs(cumsumsortw-q1))],sortx[which.min(abs(cumsumsortw-q2))]))
 }
 
-#' Create a State Space Model Representation of Linear Regression Model
-#'
-#' Function regSSM creates a state space representation of linear regression model.
-#' 
-#' The linear Gaussian state space model is given by
-#' 
-#' \deqn{y_t = X_t \beta_t + \epsilon_t,}{y[t] = Z[t]\alpha[t] + \epsilon[t], (observation equation)}
-#' 
-#' \deqn{\alpha_{t+1} = T_t \alpha_t + R_t \eta_t,}{\alpha[t+1] = T[t]\alpha[t] + R[t]\eta[t], (transition equation)}
-#' 
-#' where \eqn{\epsilon_t ~ N(0,H_t)}{\epsilon[t] ~ N(0,H[t])}, \eqn{\eta_t ~ N(0,Q_t)}{\eta[t] ~ N(0,Q[t])} 
-#' and \eqn{\alpha_1 ~ N(a_1,P_1)}{\alpha[1] ~ N(a[1],P[1])} independently of each other. In case of non-Gaussian observations,
-#' the observation equation is of form \eqn{p(y_t|\theta_t) = p(y_t|Z_t\alpha_t)}{p(y[t]|\theta[t]) = p(y[t]|Z[t]\alpha[t])},
-#' with \eqn{p(y_t|\theta_t)}{p(y[t]|\theta[t])} being one of the following:
-#'
 
-#'
-#' @export
-#'  @inheritParams SSModel
-#'  @seealso \code{\link{arimaSSM}} for state space representation of ARIMA model, \code{\link{structSSM}} for structural time series model, and \code{\link{SSModel}} for custom \code{SSModel} object.
-#' @param X A \eqn{n \times k}{n*k} matrix of explanatory variables, with each column containing one explanatory variable, or a list of length \eqn{p} 
-#' containing \eqn{X} matrices for each series. If X is matrix, it is assumed that all \eqn{p} series use same explanatory variables.  
-#' @param H A \eqn{p \times p}{p*p} covariance matrix (or \eqn{p \times p \times n}{p*p*n} array in of time-varying case) of the disturbance terms 
-#'  \eqn{\epsilon_t}{epsilon[t]} of the observation equation. Default gives \eqn{p \times p}{p*p} zero matrix.
-#'  Omitted in case of non-Gaussian distributions. Augment the state vector if you want to add additional noise.
-#' @param Q A \eqn{r \times r}{r*r} (or \eqn{r \times r \times n}{r*r*n} array in of time-varying case) covariance matrix of the disturbance terms 
-#'  \eqn{\eta_t}{\eta[t]} of the system equation.  Default is \eqn{m \times m}{m*m} zero matrix ie. ordinary time-invariant regression.
-fnRegSSM <- function(y, X, H=NULL, Q=NULL, u=NULL, distribution = c("Gaussian", "Poisson", "Binomial"), 
-        transform = c("none", "ldl", "augment"), tolF = .Machine$double.eps^0.5, tol0 = .Machine$double.eps^0.5) {
-    
-    transform <- match.arg(arg=transform, choices = c("none", "ldl", "augment"))    
-    distribution <- match.arg(arg=distribution, choices = c("Gaussian", "Poisson", "Binomial"))    
-    
-    y<-as.ts(y)
-    if(is.array(y)){
-        p <- as.integer(dim(y)[2])
-        n <- as.integer(dim(y)[1])  
-    } else {
-        p <- as.integer(1)
-        n <- as.integer(length(y))  
-    }     
-    storage.mode(y)<-"double"
-    
-    if(p>1 & !identical(distribution,"Gaussian")) stop("Only univariate series are supported for non-Gaussian models.")
-    #define number of states    
-    
-    if(!is.list(X)){       
-        
-        if(!is.ts(X) & (!identical(dim(X)[1],n) | is.null(dim(X)[2]))) stop("X is not an n times k matrix or list of such matrices.")
-        X2<-vector("list",p)
-        for(i in 1:p)
-            X2[[i]]<-data.matrix(X)
-        X<-X2
-    } 
-    xdim <- sapply(X,dim) #number of regressors including the constant
-    if(!identical(sum(xdim[1,]==n),p)) stop("X is not an n times k matrix or list of such matrices.")
-    
-    kn <- xdim[2,] #number of regressors including the constant
-    m <- as.integer(sum(kn)) # number of states
-    tspy<-attributes(y)
-    y<-data.matrix(y)
-    for(j in 1:p){
-        ymiss <- is.na(y[,j])
-        if(sum(ymiss)>0 & sum(is.na(X[[j]]))>0){
-            for(i in 1:kn[j]){
-                xmiss<-is.na(X[[j]][, i])
-                y[xmiss,j]<-NA
-            }
-            if(!identical(ymiss,is.na(y[,j])))
-                warning("Missing values in X, corresponding elements in y set to NA.")            
-        }
-    }        
-    attributes(y)<-tspy
-    kncs<-c(0,cumsum(kn))
-    Z<-array(0, dim=c(p, m, n))  
-    states<-NULL
-    for (j in 1:p){                 
-        Z[j,(kncs[j]+1):kncs[j+1] , ] <- t(X[[j]])
-        states<-c(states,paste0("beta",1:kn[j],".",j))
+fnMeanQs <- function(r, Q, T, NUMSIM, mP1inf, ma1){
+    #modelHere <-fnDefineModel(r$y, r$X, mQ=Q, mT=T)
+    modelHere <-fnDefineModel(r[[1]], r[[2]], mQ=Q, mT=T)
+    #ini add Paula
+    modelHere$P1inf<-mP1inf
+    modelHere$a1<-ma1
+    #end add Paula
+    s1<-fnImportanceSample(modelHere, NUMSIM)
+    s<-list(sam=s1[[1]],w=s1[[2]])
+    meanadm<-fnMean(modelHere,s$sam,s$w)
+    #obs<-fnObserved(indices=1:(dim(modelHere$Q)[2]),idForecast=which(is.na(r$y)),modelHere,s$sam)
+    obs<-fnObserved(indices=1:(dim(modelHere$Q)[2]),idForecast=which(is.na(r[[1]])),modelHere,s$sam)
+    lower = fnQuantiles(obs,quant=0.5,s$w)
+    upper = fnQuantiles(obs,quant=0.95,s$w)
+    list(mean=meanadm, ul=rbind(lower,upper), obs=obs, w=s$w)
+}
+
+fullDist <- function(obs, w, maxcount){
+    ntimes = nrow(res$obs)
+    d = matrix(0, ntimes, maxcount+2) # +1 for zero, +1 for over max
+    for(i in 1:ntimes){
+        tab = tapply(w, obs[i,], sum)
+        tab = tab/sum(tab) # normalise to 1
+        d[i,]=vtab(tab, maxcount)
     }
+    d
+}
+
+vtab <- function(tab, maxcount){
+    v = rep(0,maxcount+2)
+    v[1 + as.numeric(names(tab))] = tab
+    v[maxcount+2] = sum(v[-(1:(maxcount+1))],na.rm=TRUE)
+    v[1:(maxcount+2)]
+}
+
+
+##' Extend a data set for prediction
+##'
+##' given a time-count dataset, return the covariate matrix with added observations after the last one
+##' with NA as observed value
+##' @title Generate extended covariate matrix
+##' @param dataset input data set
+##' @param formula of the form count~date
+##' @param npredict number of extra rows to add on
+##' @return a data frame of covariates for the model
+##' @author Barry S Rowlingson
+extendData <- function(dataset, formula, npredict){
+    mm = model.frame(formula, dataset) # count ~ date
+    pm = data.frame(count=rep(NA,npredict), date=max(as.Date(mm[,2])) + 1:npredict)
+    return(fnCovMat(c(mm[,2], pm[,2]), c(mm[,1],pm[,1])))
     
-    #H
-    if(distribution!="Gaussian"){
-        H_type<-"Omitted"
-        H <- array(0, dim=c(p, p, 1))
-    } else {
-        if(is.null(H)){
-            H <- array(0, dim=c(p, p, 1))
-            H_type<-"Diagonal"
-        } else {            
-            H <- array(H, dim=c(p, p,  (n-1) * (max(dim(H)[3], 0,na.rm=TRUE) > 1) + 1))
-            if(sum(is.na(H))>0){
-                H_type<-"Untransformed"
-            } else {
-                if(transform=="none"){
-                    if(p==1){
-                        H_type<-"Diagonal"
-                    } else {      
-                        H_type<-"Diagonal"
-                        for(i in 1:dim(H)[3]){
-                            if(max(abs(H[,,i][-which(diag(p)==1)]), na.rm=TRUE)>0){
-                                H_type<-"Untransformed"
-                                break
-                            }
-                        }
-                    }
-                } else{
-                    H_type<-NULL
-                } 
-            }   
-        }         
-    }
-    T<-diag(m)
-    dim(T)<-c(m,m,1)
+}
+
+##' Fit model to historical data
+##'
+##' Given some date-count data and a model name, return the fitted model parameters
+##' @title part1 - fitting
+##' @param dataset 
+##' @param formula 
+##' @param modelName 
+##' @return the model object
+##' @author Barry S Rowlingson
+part1 <- function(dataset, formula,
+                  modelName=c("Static","DynamicInterceptCosSin","DynamicIntercept","DynamicCosSin")
+                  ){
+    modelo = match.arg(modelName)
+
+    mm = model.frame(formula, dataset) # formula is count ~ date
+    dataModel = fnCovMat(mm[,2],mm[,1]) # date, count
     
-    if(is.null(Q)){
-        Q <- array(0, dim=c(m, m, 1))  
-        r<-as.integer(m)        
-    } else {   
-        r<-as.integer(max(dim(Q)[1],1))        
-        Q <- array(Q, dim=c(r, r,  (n-1) * (max(dim(Q)[3], 0,na.rm=TRUE) > 1) + 1))        
-    } 
+    r<-fnCreateObsMatrixCovariatesDynamicCoeff(dataModel,modelo)
+    my<-r[[1]]
+    mX<-r[[2]]
+    dynamicCoeff<-r[[3]]
+    model<-fnDefineModel(my, mX)
+    model<-fnEstimateQandT(model, dynamicCoeff)[[1]]
+    model$modelName = modelo
+    model
+}
+
+##' make predictions from dynamic model
+##'
+##' given a model from part1, and a dataset, extend that dataset and predict
+##' for those new days by simulation
+##' @title part2 - prediction
+##' @param model returned from part1
+##' @param dataset data frame with day and count columns
+##' @param formula of the form count~date 
+##' @param npredict number of days ahead to predict
+##' @param nsims number of simulations
+##' @return means and confidence intervals
+##' @author Barry S Rowlingson
+part2 <- function(model, dataset, formula, npredict, nsims){
+
+    dataFit = extendData(dataset, formula, npredict)
+    modelo = model$modelName
+    r<-fnCreateObsMatrixCovariatesDynamicCoeff(dataFit,modelo)
+    my<-r[[1]]
+    mX<-r[[2]]
+    dynamicCoeff<-r[[3]]
+    model<-fnDefineModel(my, mX, mQ=model$Q, mT=model$T)
+    s<-fnImportanceSample(model, nsims)
+    impsample<-s[[1]]
+    w<-s[[2]]
+    mFixedEffects<-fnFixedEffectsAndCI(dynamicCoeff,impsample,w)
+    mP1inf<-diag(dynamicCoeff)
+    ma1<-rep(0,length(dynamicCoeff))
+    ma1[which(dynamicCoeff==0)]<-mFixedEffects[,2]
+    MeanQ = fnMeanQs(r, model$Q, model$T, nsims, mP1inf, ma1)
+    return(MeanQ)    
+}
     
-    R <- array(0, dim=c(m, r, 1))
-    R[,,1]<-diag(m)[,1:r,drop=FALSE]         
-    
-    
-    if(!identical(distribution,"Gaussian")){
-        if(is.null(u))
-            u<-rep(1,n)    
-        u<-array(u,dim=n)    
-    }
-    a1<-matrix(0,m,1)
-    rownames(a1)<-states
-    object<-list(y=y,Z=Z,H=H,T=T,R=R,Q=Q,a1=a1,P1=matrix(0,m,m),P1inf=diag(m),u=as.double(u), p=p,n=n,m=m,k=r,distribution=distribution,H_type=H_type,tolF=tolF,tol0=tol0)
-    class(object) <- c("SSModel","regSSM")
-    if (transform %in% c("ldl", "augment") & sum(is.na(H))==0) 
-        object <- transformSSM(object, type = transform)
-    
-    invisible(object)
-} 
