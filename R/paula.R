@@ -226,7 +226,7 @@ fnQuantiles2<-function(x,quant,w){
 }
 
 
-fnMeanQs <- function(r, Q, T, NUMSIM, mP1inf, ma1){
+fnMeanQs <- function(r, Q, T, NUMSIM, mP1inf, ma1, quantiles=c(0.5,0.95,0.99)){
     #modelHere <-fnDefineModel(r$y, r$X, mQ=Q, mT=T)
     modelHere <-fnDefineModel(r[[1]], r[[2]], mQ=Q, mT=T)
     #ini add Paula
@@ -238,13 +238,12 @@ fnMeanQs <- function(r, Q, T, NUMSIM, mP1inf, ma1){
     meanadm<-fnMean(modelHere,s$sam,s$w)
     #obs<-fnObserved(indices=1:(dim(modelHere$Q)[2]),idForecast=which(is.na(r$y)),modelHere,s$sam)
     obs<-fnObserved(indices=1:(dim(modelHere$Q)[2]),idForecast=which(is.na(r[[1]])),modelHere,s$sam)
-    lower = fnQuantiles(obs,quant=0.5,s$w)
-    upper = fnQuantiles(obs,quant=0.95,s$w)
-    list(mean=meanadm, ul=rbind(lower,upper), obs=obs, w=s$w)
+    cis = lapply(quantiles, function(q){fnQuantiles(obs,quant=q,s$w)})
+    list(mean=meanadm, cis=list(levels=quantiles, values=cis), obs=obs, w=s$w)
 }
 
 fullDist <- function(obs, w, maxcount){
-    ntimes = nrow(res$obs)
+    ntimes = nrow(obs)
     d = matrix(0, ntimes, maxcount+2) # +1 for zero, +1 for over max
     for(i in 1:ntimes){
         tab = tapply(w, obs[i,], sum)
@@ -258,7 +257,8 @@ vtab <- function(tab, maxcount){
     v = rep(0,maxcount+2)
     v[1 + as.numeric(names(tab))] = tab
     v[maxcount+2] = sum(v[-(1:(maxcount+1))],na.rm=TRUE)
-    v[1:(maxcount+2)]
+    v = v[1:(maxcount+2)]
+    100 - cumsum(c(0,v[-length(v)])*100)
 }
 
 
@@ -318,8 +318,9 @@ part1 <- function(dataset, formula,
 ##' @param nsims number of simulations
 ##' @return means and confidence intervals
 ##' @author Barry S Rowlingson
-part2 <- function(model, dataset, formula, npredict, nsims){
-
+part2 <- function(model, dataset, formula, npredict=28, nsims=1000, nmax=60, quantiles=c(0.5, 0.95, 0.99)){
+    lastKnown = max(model.frame(formula, dataset)[,2])
+    fitDates = lastKnown + (1:npredict)
     dataFit = extendData(dataset, formula, npredict)
     modelo = model$modelName
     r<-fnCreateObsMatrixCovariatesDynamicCoeff(dataFit,modelo)
@@ -334,7 +335,128 @@ part2 <- function(model, dataset, formula, npredict, nsims){
     mP1inf<-diag(dynamicCoeff)
     ma1<-rep(0,length(dynamicCoeff))
     ma1[which(dynamicCoeff==0)]<-mFixedEffects[,2]
-    MeanQ = fnMeanQs(r, model$Q, model$T, nsims, mP1inf, ma1)
-    return(MeanQ)    
+    res = fnMeanQs(r, model$Q, model$T, nsims, mP1inf, ma1, quantiles=quantiles)
+    pIndex = is.na(dataFit$Y)
+
+    fullD = fullDist(res$obs, res$w, nmax)
+    out = list(date = fitDates,
+        mean = res$mean[pIndex],
+        cis=res$cis, dist=fullD)
+        
+    return(out)
 }
     
+outJSONresults <- function(res,filename){
+    require(RJSONIO)
+    res$date = as.character(res$date)
+    cat(toJSON(res),file=filename)
+}
+
+dailyAnalysis <- function(databaseFile,
+                          modelDataFile,
+                          dir="."){
+    actual = readActual(databaseFile)
+    hospital = readHospital(databaseFile)
+    hospital2json(hospital, file.path(dir,"hospital.json"))
+
+    e = new.env()
+    load(modelDataFile,env=e)
+    medicalModel = get("modelMedical",envir=e)
+    surgicalModel = get("modelSurgical",envir=e)
+        
+    resMedical = part2(medicalModel, actual[year(actual$Date)>=2013,], Medical~Date,  nsims=1000)
+    resSurgical = part2(surgicalModel, actual[year(actual$Date)>=2013,], Surgical~Date,  nsims=1000)
+
+    outJSONresults(resMedical,file.path(dir,"medical.json"))
+    outJSONresults(resSurgical,file.path(dir,"surgical.json"))
+    
+}
+
+dailyResults <- function(actual, models, nsims=1000){
+    resMedical = part2(models$medical, actual[year(actual$Date)>=2013,], Medical~Date,  nsims=nsims)
+    resSurgical = part2(models$surgical, actual[year(actual$Date)>=2013,], Surgical~Date,  nsims=nsims)
+    list(medical=resMedical, surgical=resSurgical)
+}
+
+doDailies <- function(actual, dates, models, nsims=1000){
+    force(actual)
+    force(models)
+    force(nsims)
+    doOne <- function(predictionDay){
+        data = dataUntil(actual, predictionDay-1)
+        dailyResults(data, models, nsims=nsims)
+    }
+    llply(dates, doOne, .progress="text")
+}
+
+
+meltSection <- function(sec, label){
+    data.frame(
+        created = min(sec$date)-1,
+        forecast_date = sec$date,
+        count = sec$mean,
+        section=label
+        ) %.% mutate(ahead = forecast_date - created)
+}
+
+meltDaily <- function(d){
+    rbind(
+        meltSection(d$medical,"medical"),
+        meltSection(d$surgical,"surgical")
+        )
+}
+
+meltDailies <- function(ds){
+    ldply(ds, meltDaily)
+}
+
+meltHospital <- function(h){
+    mh = melt(h,"Date",value.name="count") %.% filter(count!="")
+    mh$section = ifelse(substr(mh$variable,1,3)=="Med","medical","surgical")
+    mh$measure = NA
+    mh$measure[grepl("Actual",mh$variable)] = "actual"
+    mh$measure[grepl("Predict",mh$variable)] = "predict"
+    mh$measure[grepl("TCI",mh$variable)] = "tci"
+    if(any(is.na(mh$measure))){
+        stop("Couldn't classify all variable data as actual, predict, or tci")
+    }
+    mh$count = as.numeric(mh$count)
+    mh$variable = NULL
+    mh
+
+}
+
+combineDailyHospital <- function(md, mh){
+    mdmh = merge(md,mh %.% filter(measure=="actual") ,
+        by.x=c("forecast_date","section"), by.y=c("Date","section"))
+    names(mdmh) = names(rename_vars(names(mdmh),forecast=count.x))
+    names(mdmh) = names(rename_vars(names(mdmh),admissions=count.y))
+
+    mdmh = merge(mdmh, mh %.% filter(measure=="predict") , by.x=c("forecast_date","section"), by.y=c("Date","section"))
+    names(mdmh) = names(rename_vars(names(mdmh),h_forecast=count))
+    mdmh$measure.x=NULL
+    mdmh$measure.y=NULL
+    
+    mdmh
+}
+
+dataUntil <- function(actual, lastDay){
+    d = as.Date(lastDay)
+    actual[actual$Date<=lastDay,]
+}
+
+db2csv <- function(databaseFile, outputfile){
+    h = readHospital(databaseFile)
+    write.table(h, outputfile, quote=TRUE,row.names=FALSE,sep=",")
+}
+
+db2json <- function(databaseFile, outputfile){
+    h = readHospital(databaseFile)
+    hospital2json(h, outputfile)
+}
+
+hospital2json <- function(hospital, outputfile){
+    hospital$date = as.character(hospital$Date)
+    hospital$Date=NULL
+    cat(toJSON(hospital),file=outputfile)
+}
