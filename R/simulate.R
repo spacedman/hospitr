@@ -54,3 +54,40 @@ zippois <- function(n, p, mu){
     y
 }
     
+##' Simulate dynamic model
+##'
+##' Simulate a dynamic intercept model with sin/cos periodicity and weekday effects.
+##' @title Simulate dynamic model
+##' @param b0 mean parameter
+##' @param phi AR correlation parameter
+##' @param w AR noise parameter
+##' @param bsin periodic parameter 1
+##' @param bcos periodic parameter 2
+##' @param alpha length-6 vector of weekday effects (Monday-Sat)
+##' @param days days for prediction on (consecutive)
+##' @return simulation
+##' @author Barry Rowlingson
+##' @example
+##'  days = as.Date("2012-01-01") + 1:(365*2)
+##'  s = simdynam(2.4, .2, .2, .2,.02,c(1,2,3,3,2,1)/5,days)
+##'  plot(s)
+simdynam <- function(b0, phi, w, bsin, bcos, alpha, days){
+    ndays = length(days)
+    W = rnorm(ndays,0,w)
+    B = rep(NA,ndays)
+    B[1] = W[1]
+    for(i in 2:ndays){
+        B[i] = B[i-1]*phi + W[i]
+    }
+    B = B + b0
+    wday = wday(days)
+    yday = yday(days)
+    p = 2*pi*yday/365
+    alpha=c(0,alpha)
+    logmu = B + bsin * sin(p) + bcos*cos(p) + alpha[wday]
+    cases = exp(logmu)
+    d = data.frame(date=days, cases=cases)
+    d$wday = factor(wday(d$date, label=TRUE),ordered=FALSE)
+    d$yday = yday(d$date)
+    d
+}

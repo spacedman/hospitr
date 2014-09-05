@@ -16,19 +16,3 @@ Suggests:
     xlsx,
     testthat,
     roxygen2
-Collate:
-    'hospitr-package.r'
-    'cases.R'
-    'dailies.R'
-    'excel.R'
-    'hospital.R'
-    'linear.R'
-    'misc.R'
-    'simulate.R'
-    'stays.R'
-    'summaries.R'
-    'web.R'
-    'dists.R'
-    'paula.R'
-    'plots.R'
-    'naive.R'

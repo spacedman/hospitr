@@ -186,3 +186,59 @@ rgba <- function(col,a){
 addData <- function(x,ydist){
     
 }
+
+
+plotDaily <- function(the_day, dailies, mh, back=7){
+    the_day = as.Date(the_day)
+
+    if(!the_day %in% attr(dailies,"dates")){
+        stop("No predictions from ",the_day)
+    }
+    iDay = which(the_day == attr(dailies,"dates"))
+
+    days = seq(the_day - back, max(dailies[[iDay]]$medical$date), "day")   
+
+    mh = rangeHospital(mh, days, the_day)
+
+    par(mfrow=c(2,1))
+    oneSectionPlot(dailies[[iDay]]$medical, mh[mh$section=="medical",],"Medical")
+    oneSectionPlot(dailies[[iDay]]$surgical, mh[mh$section=="surgical",],"Surgical")
+    par(mfrow=c(1,1))
+    
+}
+
+rangeHospital <- function(mh,days, the_day){
+    print(days)
+    mh = mh[min(days) <= mh$Date & mh$Date <= max(days),]
+    mh = mh[!(mh$measure=="actual" & mh$Date >= the_day),]
+    return(mh)
+}
+
+oneSectionPlot <- function(section, mhsection, title){
+    pred = melt(
+        data.frame(
+            date = section$date,
+            mean = section$mean,
+            lower = section$cis$values[[1]][1,],
+            upper = section$cis$values[[1]][2,]
+            ),
+        id="date"
+        )
+    print(head(mhsection))
+    g = ggplot(pred, aes(x=date,y=value, group=variable, col=variable))+geom_line()  + 
+        geom_line(data=mhsection, aes(x=Date, y=count,group=measure, col=measure))
+    print(g)
+#    xlim=range(pred$date, mhsection$date)
+#    ylim = range(pred$mean, pred$lower, pred$upper, mh$count)
+#    plot(xlim,ylim,xlim=as.Date(xlim), ylim=ylim,main=title,type="n")
+}
+
+maxMinPlot <- function(allActuals){
+    ## shows the max and min values of actual data
+    ## allActuals = readAllActuals("./Server/Data/XLS/")
+    allActuals$data = filter(allActuals$data, !(is.na(Actual.Med) & is.na(Actual.Surg)))
+    maxmins = allActuals$data %>% group_by( Dates) %>% summarise(min.Med=min(Actual.Med), max.Med=max(Actual.Med), min.Surg=min(Actual.Surg), max.Surg=max(Actual.Surg))
+    melted = melt(maxmins, id.vars="Dates") %.% do(cbind(.,data.frame(parts=str_split_fixed(.$variable,"\\.",2))))
+    recasted = dcast(melted, Dates+parts.2~parts.1,value.var="value")
+    ggplot(recasted,aes(x=Dates,ymin=min,ymax=max))+geom_errorbar() + facet_wrap(~parts.2,ncol=1)
+}

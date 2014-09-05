@@ -291,8 +291,10 @@ extendData <- function(dataset, formula, npredict){
 part1 <- function(dataset, formula,
                   modelName=c("Static","DynamicInterceptCosSin","DynamicIntercept","DynamicCosSin")
                   ){
+    
     modelo = match.arg(modelName)
-
+print("model name")
+    print(modelo)
     mm = model.frame(formula, dataset) # formula is count ~ date
     dataModel = fnCovMat(mm[,2],mm[,1]) # date, count
     
@@ -386,7 +388,9 @@ doDailies <- function(actual, dates, models, nsims=1000){
         data = dataUntil(actual, predictionDay-1)
         dailyResults(data, models, nsims=nsims)
     }
-    llply(dates, doOne, .progress="text")
+    result = llply(dates, doOne, .progress="text")
+    attr(result,"dates")=dates
+    result
 }
 
 
@@ -459,4 +463,102 @@ hospital2json <- function(hospital, outputfile){
     hospital$date = as.character(hospital$Date)
     hospital$Date=NULL
     cat(toJSON(hospital),file=outputfile)
+}
+
+hospital_upto <- function(hospital, date){
+    ## retain only admissions before date
+    post = hospital$Date >= as.Date(date)
+    hospital$MedActual[post]=""
+    hospital$SurgActual[post]=""
+    hospital
+}
+
+dump_daily_jsons <- function(dailies, hospital, path="./Dailies"){
+    dates = attr(dailies,"dates")
+    for(i in 1:length(dates)){
+        d = dates[i]
+        daily = dailies[[i]]
+        outputdir = file.path(path, as.character(d))
+        dir.create(outputdir, recursive=TRUE)
+        outJSONresults(daily$medical,file.path(outputdir,"medical.json"))
+        outJSONresults(daily$surgical,file.path(outputdir,"surgical.json"))
+        hospital2json(hospital_upto(hospital,d),file.path(outputdir,"hospital.json"))
+    }
+}
+
+datasetSelect <- function(dataset, formula, minDate, maxDate){
+    countDate = model.frame(formula, dataset)
+    names(countDate)=c("Count","Date")
+    dataset[countDate$Date >= minDate & countDate$Date <= maxDate,]
+}
+
+predictionTable <- function(model, dataset, formula, npredict, predictDays){
+    print(model$modelName)
+    jobStarts = min(predictDays) - npredict
+    jobEndsAt = max(predictDays) - 1
+
+    allStarts = seq(jobStarts,jobEndsAt,by=1)
+    allFits = lapply(seq_along(allStarts), function(jobI){
+        jobDate0 = allStarts[jobI]
+        print(jobDate0)
+        resultDates = seq(jobDate0+1, by=1, len=npredict)
+        data = datasetSelect(dataset, formula, firstDate(min(predictDays)), jobDate0)
+        print(firstDate(min(predictDays)))
+        return(part2(model, data, formula, npredict))
+    }
+        )
+    class(allFits)="predictionTable"
+    return(allFits)
+}
+
+predictionAtLag <- function(pt, n){
+    do.call(rbind,lapply(pt, function(r){ data.frame(date=r$date,mean=r$mean)[n,]}))
+}
+
+firstDate <- function(date){
+### use more than one year of historical data (start in 1 April of previous year
+### instead 1 January) because at first there are iterations in a diffuse phase where the algorithm has not converged.
+    year(date) = year(date)-1
+    month(date) = 4
+    day(date) = 1
+    date
+}
+    
+
+static_prediction <- function(models, dates, lags){
+    newdata = data.frame(wday = factor(wday(dates,label=TRUE),ordered=FALSE),
+        yday = yday(dates))
+    n = nrow(newdata)
+    d = data.frame(
+        model="Static",
+        specialty=c(rep("Medical",length(dates)),rep("Surgical",length(dates))),
+        date = c(dates,dates),
+        mean = c(
+            predict(models$medical, newdata=newdata, type="response"),
+            predict(models$surgical, newdata=newdata, type="response")
+            )
+        )
+
+    d = d[rep(1:nrow(d),length(lags)),]
+    d$lag = rep(lags, rep(n*2, length(lags)))
+    d
+}
+        
+
+hospital_prediction <- function(h, dates, lags){
+    d = h[match(dates, h$Date),c("Date","MedPredict","SurgPredict")]
+    h$MedPredict = as.numeric(h$MedPredict)
+    h$SurgPredict = as.numeric(h$SurgPredict)
+    n = nrow(d)
+    predictions = data.frame(
+        date=c(d$Date, d$Date),
+        mean=as.numeric(c(d$MedPredict, d$SurgPredict)),
+        specialty = rep(c("Medical","Surgical"), c(nrow(d),nrow(d)))
+    )
+    predictions = predictions[rep(1:nrow(predictions),length(lags)),]
+   
+    predictions$lag = rep(lags, rep(n*2, length(lags)))
+    predictions$model=factor("Hospital")
+    predictions
+    
 }
