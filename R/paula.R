@@ -293,8 +293,6 @@ part1 <- function(dataset, formula,
                   ){
     
     modelo = match.arg(modelName)
-print("model name")
-    print(modelo)
     mm = model.frame(formula, dataset) # formula is count ~ date
     dataModel = fnCovMat(mm[,2],mm[,1]) # date, count
     
@@ -493,17 +491,14 @@ datasetSelect <- function(dataset, formula, minDate, maxDate){
 }
 
 predictionTable <- function(model, dataset, formula, npredict, predictDays){
-    print(model$modelName)
     jobStarts = min(predictDays) - npredict
     jobEndsAt = max(predictDays) - 1
 
     allStarts = seq(jobStarts,jobEndsAt,by=1)
     allFits = lapply(seq_along(allStarts), function(jobI){
         jobDate0 = allStarts[jobI]
-        print(jobDate0)
         resultDates = seq(jobDate0+1, by=1, len=npredict)
         data = datasetSelect(dataset, formula, firstDate(min(predictDays)), jobDate0)
-        print(firstDate(min(predictDays)))
         return(part2(model, data, formula, npredict))
     }
         )
