@@ -289,7 +289,8 @@ extendData <- function(dataset, formula, npredict){
 ##' @return the model object
 ##' @author Barry S Rowlingson
 part1 <- function(dataset, formula,
-                  modelName=c("Static","DynamicInterceptCosSin","DynamicIntercept","DynamicCosSin")
+                  modelName=c("Static","DynamicInterceptCosSin","DynamicIntercept","DynamicCosSin"),
+                  numsim=500
                   ){
     
     modelo = match.arg(modelName)
@@ -303,6 +304,21 @@ part1 <- function(dataset, formula,
     model<-fnDefineModel(my, mX)
     model<-fnEstimateQandT(model, dynamicCoeff)[[1]]
     model$modelName = modelo
+
+
+    s<-fnImportanceSample(model, numsim)
+    impsample<-s[[1]]
+    w<-s[[2]]
+    mFixedEffects<-fnFixedEffectsAndCI(dynamicCoeff,impsample,w)
+
+#' giving this matrix
+#' mFixedEffects
+
+    mP1inf<-diag(dynamicCoeff)
+    ma1<-rep(0,length(dynamicCoeff))
+    ma1[which(dynamicCoeff==0)]<-mFixedEffects[,2]
+    model$a1 = ma1
+    model$mFixedEffects = mFixedEffects
     model
 }
 
@@ -324,10 +340,16 @@ part2 <- function(model, dataset, formula, npredict=28, nsims=1000, nmax=60, qua
     dataFit = extendData(dataset, formula, npredict)
     modelo = model$modelName
     r<-fnCreateObsMatrixCovariatesDynamicCoeff(dataFit,modelo)
+
     my<-r[[1]]
     mX<-r[[2]]
     dynamicCoeff<-r[[3]]
+
+    ma1 = model$a1
     model<-fnDefineModel(my, mX, mQ=model$Q, mT=model$T)
+    model$P1inf = diag(dynamicCoeff)
+    model$a1 = ma1
+    
     s<-fnImportanceSample(model, nsims)
     impsample<-s[[1]]
     w<-s[[2]]
