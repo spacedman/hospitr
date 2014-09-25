@@ -533,7 +533,7 @@ predictionAtLag <- function(pt, n){
 }
 
 firstDate <- function(date){
-### use more than one year of historical data (start in 1 April of previous year
+### use less than one year of historical data (start in 1 April of previous year
 ### instead 1 January) because at first there are iterations in a diffuse phase where the algorithm has not converged.
     year(date) = year(date)-1
     month(date) = 4
